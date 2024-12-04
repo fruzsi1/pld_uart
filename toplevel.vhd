@@ -7,8 +7,8 @@ entity toplevel is
     port(
         nReset		: in std_logic; -- pushbutton
         Pin1		: out std_logic; -- uart tx
-		Pin2		: in std_logic; -- uart rx
-		Led0		: out std_logic -- indicator led
+	Pin2		: in std_logic; -- uart rx
+	Led0		: out std_logic -- indicator led
     );
 
 end entity;
@@ -17,7 +17,7 @@ architecture toplevel_arch of toplevel is
 
 	component Int_Osc is
 		port(	stdBy		: in std_logic;
-				Clk			: out std_logic
+			Clk			: out std_logic
 		);
 	end component;
 		
@@ -65,7 +65,6 @@ architecture toplevel_arch of toplevel is
 	signal read_data_signal  : std_logic_vector(7 downto 0); 	-- Data read from FIFO
 	signal send_data_signal  : std_logic;           			-- Trigger for sending data
 	signal busy_signal       : std_logic;           			-- UART transmitter busy signal
-	signal nReset_io         : std_logic;           			-- Pushbutton for reset
 	signal Pin1_io_tx        : std_logic;           			-- UART Tx (output)
 	signal Pin2_io_rx        : std_logic;           			-- UART Rx (input)
 	
@@ -110,7 +109,7 @@ begin
 	
 	process(clk_signal, reset_signal)
 begin
-    if reset_signal = '1' then
+    if reset_signal = '0' then
         -- Initialize or reset signals when reset is active
         write_en_signal <= '0';
         read_en_signal <= '0';
@@ -136,7 +135,7 @@ begin
 end process;
 	
 	-- Physical IO map
-	nReset_io <= nReset;
+	reset_signal <= nReset;
 	Pin1 <= Pin1_io_tx;       
 	Pin2_io_rx <= Pin2;
 	Led0 <= busy_signal; -- LED is used to indicate UART transmitter busy status
