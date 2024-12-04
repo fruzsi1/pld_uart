@@ -1,0 +1,487 @@
+<?xml version="1.0" encoding="utf-8"?>
+<circuit>
+  <version>2</version>
+  <attributes/>
+  <visualElements>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>ghdlOptions</string>
+          <string></string>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>uart_receiver</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk,nReset,rx</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity uart_receiver is
+    port (
+        clk         : in  std_logic;
+        nReset      : in  std_logic;
+        rx          : in  std_logic;
+        dataout     : out std_logic_vector(7 downto 0);
+        data_valid  : out std_logic
+    );
+end entity;
+
+architecture uart_receiver_arch of uart_receiver is
+    constant clk_frq    : integer := 32;  
+    constant baud_rt    : integer := 4; 
+
+    constant baud_div   : integer := clk_frq / baud_rt;
+    constant sample_cnt : integer := baud_div / 2;  
+    type state_type is (IDLE, START, DATA, STOP_BIT);
+    signal state        : state_type := IDLE;
+
+    signal baud_cnt     : integer range 0 to baud_div - 1 := 0;
+    signal bit_cnt      : integer range 0 to 7 := 0;
+    signal rx_shift_reg : std_logic_vector(7 downto 0) := (others =&gt; &apos;0&apos;);
+    signal sample_point : integer := (baud_div/2)-1;
+
+    signal rx_data      : std_logic_vector(7 downto 0) := (others =&gt; &apos;0&apos;);
+    signal valid        : std_logic := &apos;0&apos;;
+
+begin
+    process(clk, nReset)
+    begin
+        if nReset = &apos;0&apos; then
+            state        &lt;= IDLE;
+            baud_cnt     &lt;= 0;
+            bit_cnt      &lt;= 0;
+            rx_shift_reg &lt;= (others =&gt; &apos;0&apos;);
+            rx_data      &lt;= (others =&gt; &apos;0&apos;);
+            valid        &lt;= &apos;0&apos;;
+        elsif rising_edge(clk) then
+            valid &lt;= &apos;0&apos;; 
+
+            case state is
+                when IDLE =&gt;
+                    if rx = &apos;0&apos; then  
+                        state &lt;= START;
+                        baud_cnt &lt;= 0;
+                    end if;
+
+                when START =&gt;
+                    if baud_cnt = sample_point then
+                        if rx = &apos;0&apos; then  
+                            baud_cnt &lt;= 0;
+                            state &lt;= DATA;
+                        else  -- False start, return to IDLE
+                            state &lt;= IDLE;
+                        end if;
+                    else
+                        baud_cnt &lt;= baud_cnt + 1;
+                    end if;
+
+                when DATA =&gt;
+                    if baud_cnt = baud_div - 1 then
+                        rx_shift_reg(bit_cnt) &lt;= rx;
+                        baud_cnt &lt;= 0;
+
+                        if bit_cnt &lt; 7 then
+                            bit_cnt &lt;= bit_cnt + 1;
+                        else
+                            bit_cnt &lt;= 0;
+                            state &lt;= STOP_BIT;
+                        end if;
+                    else
+                        baud_cnt &lt;= baud_cnt + 1;
+                    end if;
+
+                when STOP_BIT =&gt;
+                    if baud_cnt = baud_div - 1 then
+                        if rx = &apos;1&apos; then  
+                            rx_data &lt;= rx_shift_reg;
+                            valid &lt;= &apos;1&apos;;  
+                        end if;
+                        state &lt;= IDLE;
+                        baud_cnt &lt;= 0;
+                    else
+                        baud_cnt &lt;= baud_cnt + 1;
+                    end if;
+            end case;
+        end if;
+    end process;
+
+    dataout &lt;= rx_data;
+    data_valid &lt;= valid;
+end uart_receiver_arch;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>dataout:8,data_valid</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>10</int>
+        </entry>
+      </elementAttributes>
+      <pos x="660" y="300"/>
+    </visualElement>
+    <visualElement>
+      <elementName>LED</elementName>
+      <elementAttributes/>
+      <pos x="900" y="380"/>
+    </visualElement>
+    <visualElement>
+      <elementName>External</elementName>
+      <elementAttributes>
+        <entry>
+          <string>applicationType</string>
+          <appType>GHDL</appType>
+        </entry>
+        <entry>
+          <string>ghdlOptions</string>
+          <string></string>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>uart_transmitter</string>
+        </entry>
+        <entry>
+          <string>externalInputs</string>
+          <string>clk,nReset,datain:8,send_data</string>
+        </entry>
+        <entry>
+          <string>Code</string>
+          <string>library ieee;
+use ieee.std_logic_1164.all;
+use ieee.numeric_std.all;
+
+entity uart_transmitter is
+   
+    port(
+        clk         : in    std_logic;
+        nReset      : in    std_logic;
+        datain      : in    std_logic_vector(7 downto 0);
+        send_data   : in    std_logic;
+        tx          : out   std_logic;
+        busy        : out   std_logic
+    );
+end entity;
+
+architecture uart_transmitter_arch of uart_transmitter is
+    constant clk_frq     	: integer := 32;
+    constant baud_rt     	: integer := 4;
+
+    constant baud_div       	: integer := clk_frq / baud_rt;
+    
+    type state_stype is (START, DATA, STOP_BIT, IDLE);
+    signal state            : state_stype := IDLE;
+
+    signal baud_cnt         : integer range 0 to baud_div - 1 := 0;
+    signal bit_cnt          : integer range 0 to 7 := 0;
+
+    signal shift_reg        : std_logic_vector(7 downto 0) := (others =&gt; &apos;0&apos;);
+    signal transmitter_line : std_logic := &apos;1&apos;;
+
+begin   
+    process(clk, nReset)
+    begin
+        if nReset = &apos;0&apos; then
+            state           &lt;= IDLE;
+            baud_cnt        &lt;= 0;
+            bit_cnt         &lt;= 0;
+            shift_reg       &lt;= (others =&gt; &apos;0&apos;);
+            transmitter_line &lt;= &apos;1&apos;;
+            busy            &lt;= &apos;0&apos;;
+        elsif (clk&apos;event and clk = &apos;1&apos;) then
+            case state is
+                when IDLE =&gt;
+                    transmitter_line &lt;= &apos;1&apos;;
+                    busy &lt;= &apos;0&apos;;
+                    if send_data = &apos;1&apos; then
+                        shift_reg     &lt;= datain;
+                        state         &lt;= START;
+                        baud_cnt      &lt;= 0;
+                        busy          &lt;= &apos;1&apos;;
+                    end if;
+
+                when START =&gt;
+                    transmitter_line &lt;= &apos;0&apos;;
+                    if baud_cnt &lt; baud_div - 1 then
+                        baud_cnt &lt;= baud_cnt + 1;
+                    else
+                        baud_cnt &lt;= 0;
+                        state &lt;= DATA;
+                    end if;
+
+                when DATA =&gt;
+                    transmitter_line &lt;= shift_reg(bit_cnt);
+                    if baud_cnt &lt; baud_div - 1 then
+                        baud_cnt &lt;= baud_cnt + 1;
+                    else
+                        baud_cnt &lt;= 0;
+
+                        if bit_cnt &lt; 7 then
+                            bit_cnt &lt;= bit_cnt + 1;
+                        else
+                            bit_cnt &lt;= 0;
+                            state &lt;= STOP_BIT;
+                        end if;
+                    end if;
+
+                when STOP_BIT =&gt;
+                    transmitter_line &lt;= &apos;1&apos;;
+                    if baud_cnt &lt; baud_div - 1 then
+                        baud_cnt &lt;= baud_cnt + 1;
+                    else
+                        baud_cnt &lt;= 0;
+                        state &lt;= IDLE;
+                    end if;
+            end case;
+        end if;
+    end process;
+
+    tx &lt;= transmitter_line;
+
+end uart_transmitter_arch;</string>
+        </entry>
+        <entry>
+          <string>externalOutputs</string>
+          <string>tx,busy</string>
+        </entry>
+        <entry>
+          <string>Width</string>
+          <int>6</int>
+        </entry>
+      </elementAttributes>
+      <pos x="140" y="280"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Clock</elementName>
+      <elementAttributes>
+        <entry>
+          <string>runRealTime</string>
+          <boolean>true</boolean>
+        </entry>
+        <entry>
+          <string>Label</string>
+          <string>clk</string>
+        </entry>
+        <entry>
+          <string>Frequency</string>
+          <int>32</int>
+        </entry>
+      </elementAttributes>
+      <pos x="-80" y="240"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes/>
+      <pos x="-80" y="300"/>
+    </visualElement>
+    <visualElement>
+      <elementName>In</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>senddata</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-40" y="380"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Probe</elementName>
+      <elementAttributes/>
+      <pos x="320" y="320"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Const</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Value</string>
+          <long>299081</long>
+        </entry>
+        <entry>
+          <string>Bits</string>
+          <int>8</int>
+        </entry>
+      </elementAttributes>
+      <pos x="-100" y="340"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Probe</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Label</string>
+          <string>out</string>
+        </entry>
+      </elementAttributes>
+      <pos x="900" y="300"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Text</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Description</string>
+          <string>Párhuzamos</string>
+        </entry>
+      </elementAttributes>
+      <pos x="-160" y="120"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Text</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Description</string>
+          <string>Soros</string>
+        </entry>
+      </elementAttributes>
+      <pos x="160" y="120"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Text</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Description</string>
+          <string>Soros</string>
+        </entry>
+      </elementAttributes>
+      <pos x="560" y="120"/>
+    </visualElement>
+    <visualElement>
+      <elementName>Text</elementName>
+      <elementAttributes>
+        <entry>
+          <string>Description</string>
+          <string>Párhuzamos</string>
+        </entry>
+      </elementAttributes>
+      <pos x="760" y="120"/>
+    </visualElement>
+  </visualElements>
+  <wires>
+    <wire>
+      <p1 x="520" y="320"/>
+      <p2 x="660" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="860" y="320"/>
+      <p2 x="880" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="80" y="320"/>
+      <p2 x="140" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="280" y="320"/>
+      <p2 x="320" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="-80" y="240"/>
+      <p2 x="80" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="20" y="160"/>
+      <p2 x="520" y="160"/>
+    </wire>
+    <wire>
+      <p1 x="120" y="340"/>
+      <p2 x="140" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="420" y="340"/>
+      <p2 x="660" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="-100" y="340"/>
+      <p2 x="80" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="80" y="280"/>
+      <p2 x="140" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="260" y="280"/>
+      <p2 x="420" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="80" y="200"/>
+      <p2 x="460" y="200"/>
+    </wire>
+    <wire>
+      <p1 x="-80" y="300"/>
+      <p2 x="20" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="260" y="300"/>
+      <p2 x="280" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="460" y="300"/>
+      <p2 x="660" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="860" y="300"/>
+      <p2 x="900" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="20" y="300"/>
+      <p2 x="140" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="880" y="380"/>
+      <p2 x="900" y="380"/>
+    </wire>
+    <wire>
+      <p1 x="-40" y="380"/>
+      <p2 x="120" y="380"/>
+    </wire>
+    <wire>
+      <p1 x="880" y="320"/>
+      <p2 x="880" y="380"/>
+    </wire>
+    <wire>
+      <p1 x="80" y="200"/>
+      <p2 x="80" y="240"/>
+    </wire>
+    <wire>
+      <p1 x="80" y="320"/>
+      <p2 x="80" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="80" y="240"/>
+      <p2 x="80" y="280"/>
+    </wire>
+    <wire>
+      <p1 x="420" y="280"/>
+      <p2 x="420" y="340"/>
+    </wire>
+    <wire>
+      <p1 x="20" y="160"/>
+      <p2 x="20" y="300"/>
+    </wire>
+    <wire>
+      <p1 x="120" y="340"/>
+      <p2 x="120" y="380"/>
+    </wire>
+    <wire>
+      <p1 x="280" y="300"/>
+      <p2 x="280" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="520" y="160"/>
+      <p2 x="520" y="320"/>
+    </wire>
+    <wire>
+      <p1 x="460" y="200"/>
+      <p2 x="460" y="300"/>
+    </wire>
+  </wires>
+  <measurementOrdering/>
+</circuit>
