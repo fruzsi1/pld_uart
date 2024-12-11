@@ -55,13 +55,16 @@ begin
         wait for 100 ns;
 
         -- EDIT Add stimuli here
-        datain <= x"49";
+        datain <= x"31";
         send_data <= '1';
-        wait for 10000 ns;
-        
+        wait for 2000 ns;
+        send_data <= '0';
+        wait for 100000 ns;
         datain <= x"6b";
         send_data <= '1';
-        wait for 10000 ns;
+        wait for 2000 ns;
+        send_data <= '0';
+        wait for 100000 ns;
 
         -- Stop the clock and terminate simulation
         TbSimEnded <= '1';
