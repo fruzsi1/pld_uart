@@ -1,4 +1,4 @@
 ### testbenches:
 (they dont work yet)
-- [rx testbench](https://www.edaplayground.com/x/Z6bz) 
+- [rx testbench updated](https://www.edaplayground.com/x/wAuf) 
 - [tx testbench](https://www.edaplayground.com/x/bjRU)
