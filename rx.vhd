@@ -13,8 +13,8 @@ entity uart_receiver is
 end entity;
 
 architecture uart_receiver_arch of uart_receiver is
-    constant clk_frq    : integer := 2304000;  
-    constant baud_rt    : integer := 115200; 
+    constant clk_frq    : integer := 520000;  
+    constant baud_rt    : integer := 65000; 
 
     constant baud_div   : integer := clk_frq / baud_rt;
     constant sample_cnt : integer := baud_div / 2;  
