@@ -1,14 +1,13 @@
 library IEEE;
 	use IEEE.std_logic_1164.all;
 	use IEEE.numeric_std.all;
-	use ieee.math_real.all;
 
 entity toplevel is
     port(
         nReset		: in std_logic; -- pushbutton
         Pin1		: out std_logic; -- uart tx
-	Pin2		: in std_logic; -- uart rx
-	Led0		: out std_logic -- indicator led
+		Pin2		: in std_logic; -- uart rx
+		Led0		: out std_logic -- indicator led
     );
 
 end entity;
@@ -17,7 +16,15 @@ architecture toplevel_arch of toplevel is
 
 	component Int_Osc is
 		port(	stdBy		: in std_logic;
-			Clk			: out std_logic
+				Clk			: out std_logic
+		);
+	end component;
+	
+	component clk_div is
+		port(
+			nReset : in std_logic;
+			Osc_clk : in std_logic;
+			RxTx_clk : out std_logic
 		);
 	end component;
 		
@@ -56,7 +63,8 @@ architecture toplevel_arch of toplevel is
 	
 	end component;
 	
-	signal clk_signal        : std_logic;
+	signal osc_clk_signal    : std_logic;
+	signal rxtx_clk_signal   : std_logic;
 	signal reset_signal      : std_logic;
 	signal dataout_signal    : std_logic_vector(7 downto 0); 	-- Data output from receiver
 	signal data_valid_signal : std_logic;           			-- Data valid signal from receiver
@@ -73,12 +81,19 @@ begin
 	osc1: Int_Osc
 		port map (
 			stdBy => '0',       -- Set stdBy to '0' to activate oscillator
-			Clk => clk_signal
+			Clk => osc_clk_signal
+		);
+		
+	clock_divider: clk_div
+		port map (
+			nReset => reset_signal,
+			Osc_clk => osc_clk_signal,
+			RxTx_clk => rxtx_clk_signal
 		);
 	
 	uart_rx: uart_receiver
 		port map (
-			clk         => clk_signal,          
+			clk         => rxtx_clk_signal,          
 			nReset      => reset_signal,        
 			rx          => Pin2_io_rx,           
 			dataout     => dataout_signal,      
@@ -87,7 +102,7 @@ begin
 		
 	fifo1: GENERIC_FIFO
 		port map (
-			clock       => clk_signal,            
+			clock       => rxtx_clk_signal,            
 			reset       => reset_signal,          
 			write_data  => dataout_signal,        
 			read_data   => read_data_signal,      
@@ -99,7 +114,7 @@ begin
 		
 	uart_tx: uart_transmitter
 		port map (
-			clk         => clk_signal,           
+			clk         => rxtx_clk_signal,           
 			nReset      => reset_signal,         
 			datain      => read_data_signal,     
 			send_data   => send_data_signal,     
@@ -107,14 +122,14 @@ begin
 			busy        => busy_signal           
 		);
 	
-	process(clk_signal, reset_signal)
-begin
+	process(rxtx_clk_signal, reset_signal)
+	begin
     if reset_signal = '0' then
         -- Initialize or reset signals when reset is active
         write_en_signal <= '0';
         read_en_signal <= '0';
         send_data_signal <= '0';
-    elsif rising_edge(clk_signal) then
+    elsif rising_edge(rxtx_clk_signal) then
         -- FIFO write enable when data is valid from receiver
         if data_valid_signal = '1' then
             write_en_signal <= '1';
@@ -132,7 +147,7 @@ begin
             send_data_signal <= '0';
         end if;
     end if;
-end process;
+	end process;
 	
 	-- Physical IO map
 	reset_signal <= nReset;
